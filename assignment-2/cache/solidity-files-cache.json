@@ -2,8 +2,8 @@
   "_format": "hh-sol-cache-2",
   "files": {
     "/Users/nanqiang/Documents/code/web3-tutorial/web3-training/assignment-2/contracts/GuessNumber.sol": {
-      "lastModificationDate": 1658842495131,
-      "contentHash": "471efe51238dd001f271c907c81a3ed6",
+      "lastModificationDate": 1658904832444,
+      "contentHash": "8ee538c069a68570bea99e967647e611",
       "sourceName": "contracts/GuessNumber.sol",
       "solcConfig": {
         "version": "0.8.9",
