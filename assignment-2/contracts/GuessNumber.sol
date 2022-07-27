@@ -21,10 +21,10 @@ contract GuessNumber {
     uint16[] winUserIndexes;
     address payable[] winAddresses;
 
-    constructor(bytes32 _nonce, uint16 _num) payable {
+    constructor(bytes32 _nonceHash, bytes32 _nonceNumHash) payable {
         host = msg.sender;
-        nonceHash = keccak256(abi.encode(_nonce));
-        nonceNumHash = keccak256(abi.encode(_nonce, _num));
+        nonceHash = _nonceHash;
+        nonceNumHash = _nonceNumHash;
         initDepositValue = msg.value;
     }
 
