@@ -68,17 +68,16 @@ contract GuessNumber {
         uint256 depositValue_ = address(this).balance / winnerAddresses.length;
         for (uint16 i = 0; i < winnerAddresses.length; i++) {
             console.log(depositValue_, winnerAddresses[i]);
-            winnerAddresses[i].transfer(depositValue_);
-            // claimReward(winnerAddresses[i], depositValue_);
+            // winnerAddresses[i].transfer(depositValue_);
+            transfer(winnerAddresses[i], depositValue_);
         }
         concluded = true;
     }
 
-    // function claimReward(address payable winner, uint value) public {
-    //     // require(msg.sender == winner, "Not winner");
-    //     (bool sent, ) = winner.call{value: value}("");
-    //     require(sent, "Failed to send Ether");
-    // }
+    function transfer(address payable _to, uint _amount) public {
+        (bool success, ) = _to.call{value: _amount}("");
+        require(success, "Failed to send Ether");
+    }
 
     function winningGame(uint16 _num)
         public
