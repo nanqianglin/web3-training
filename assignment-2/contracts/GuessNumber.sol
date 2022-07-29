@@ -168,4 +168,14 @@ contract GuessNumber {
         require(inRange == true, "the number is out of range");
         _;
     }
+
+    event Received(address caller, uint amount, string message);
+
+    fallback() external payable {
+        emit Received(msg.sender, msg.value, "Fallback was called");
+    }
+
+    receive() external payable {
+        emit Received(msg.sender, msg.value, "Received was called");
+    }
 }
