@@ -35,16 +35,18 @@ contract FruitStand {
             _amount > 0,
             "FruitStand: Stake amount must be greater than zero"
         );
-        if (userStakes[msg.sender].startBlock != 0) {
+        UserStake memory userStake = userStakes[msg.sender];
+
+        if (userStake.startBlock != 0) {
             // Pay out current stake
-            payout(msg.sender, userStakes[msg.sender]);
+            payout(msg.sender, userStake);
         }
         water.transferFrom(msg.sender, address(this), _amount);
         UserStake memory newStake = UserStake({
             startBlock: block.number,
             stakeAmount: _amount
         });
-        userStakes[msg.sender] = newStake;
+        userStake = newStake;
     }
 
     function unstake() external {
@@ -52,9 +54,11 @@ contract FruitStand {
             userStakes[msg.sender].startBlock != 0,
             "FruitStand: User have not staked"
         );
-        payout(msg.sender, userStakes[msg.sender]);
-        water.transfer(msg.sender, userStakes[msg.sender].stakeAmount);
-        userStakes[msg.sender] = UserStake({startBlock: 0, stakeAmount: 0});
+        UserStake memory userStake = userStakes[msg.sender];
+
+        payout(msg.sender, userStake);
+        water.transfer(msg.sender, userStake.stakeAmount);
+        userStake = UserStake({startBlock: 0, stakeAmount: 0});
     }
 
     function payout(address user, UserStake memory _stake)
