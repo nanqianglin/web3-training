@@ -29,7 +29,7 @@ describe.only('Bank Cheque', function () {
     const amount = ethers.utils.parseEther("1.0");
     const validFrom = 0;
     const validThru = 0;
-    const hash = await hardhatBank.getMessageHash(chequeId, payer, payee, amount, validFrom, validThru, hardhatBank.address);
+    const hash = ethers.utils.solidityKeccak256(['bytes32', 'address', 'address', 'uint', 'uint32', 'uint32', 'address'], [chequeId, payer, payee, amount, validFrom, validThru, hardhatBank.address]);
     const sig = await owner.signMessage(ethers.utils.arrayify(hash));
 
     await hardhatBank.connect(owner).issueECheque(chequeId);
@@ -87,7 +87,7 @@ describe.only('Bank Cheque', function () {
     const amount = ethers.utils.parseEther("1.0");
     const validFrom = 100;
     const validThru = 0;
-    const hash = await hardhatBank.getMessageHash(chequeId, payer, payee, amount, validFrom, validThru, hardhatBank.address);
+    const hash = ethers.utils.solidityKeccak256(['bytes32', 'address', 'address', 'uint', 'uint32', 'uint32', 'address'], [chequeId, payer, payee, amount, validFrom, validThru, hardhatBank.address]);
     const sig = await owner.signMessage(ethers.utils.arrayify(hash));
 
     await hardhatBank.connect(owner).issueECheque(chequeId);
@@ -106,7 +106,7 @@ describe.only('Bank Cheque', function () {
     const amount = ethers.utils.parseEther("1.0");
     const validFrom = 0;
     const validThru = 1;
-    const hash = await hardhatBank.getMessageHash(chequeId, payer, payee, amount, validFrom, validThru, hardhatBank.address);
+    const hash = ethers.utils.solidityKeccak256(['bytes32', 'address', 'address', 'uint', 'uint32', 'uint32', 'address'], [chequeId, payer, payee, amount, validFrom, validThru, hardhatBank.address]);
     const sig = await owner.signMessage(ethers.utils.arrayify(hash));
 
     await hardhatBank.connect(owner).issueECheque(chequeId);
@@ -127,7 +127,7 @@ describe.only('Bank Cheque', function () {
     const amountWrong = ethers.utils.parseEther("2.0");
     const validFrom = 0;
     const validThru = 0;
-    const hash = await hardhatBank.getMessageHash(chequeId, payer, payee, amount, validFrom, validThru, hardhatBank.address);
+    const hash = ethers.utils.solidityKeccak256(['bytes32', 'address', 'address', 'uint', 'uint32', 'uint32', 'address'], [chequeId, payer, payee, amount, validFrom, validThru, hardhatBank.address]);
     const sig = await owner.signMessage(ethers.utils.arrayify(hash));
 
     await hardhatBank.connect(owner).issueECheque(chequeId);
@@ -147,7 +147,7 @@ describe.only('Bank Cheque', function () {
     const amount = ethers.utils.parseEther("2.0");
     const validFrom = 0;
     const validThru = 0;
-    const hash = await hardhatBank.getMessageHash(chequeId, payer, payee, amount, validFrom, validThru, hardhatBank.address);
+    const hash = ethers.utils.solidityKeccak256(['bytes32', 'address', 'address', 'uint', 'uint32', 'uint32', 'address'], [chequeId, payer, payee, amount, validFrom, validThru, hardhatBank.address]);
     const sig = await owner.signMessage(ethers.utils.arrayify(hash));
 
     await hardhatBank.connect(owner).issueECheque(chequeId);
@@ -167,7 +167,7 @@ describe.only('Bank Cheque', function () {
     const amount = ethers.utils.parseEther("2.0");
     const validFrom = 0;
     const validThru = 0;
-    const hash = await hardhatBank.getMessageHash(chequeId, payer, payee, amount, validFrom, validThru, hardhatBank.address);
+    const hash = ethers.utils.solidityKeccak256(['bytes32', 'address', 'address', 'uint', 'uint32', 'uint32', 'address'], [chequeId, payer, payee, amount, validFrom, validThru, hardhatBank.address]);
     const sig = await owner.signMessage(ethers.utils.arrayify(hash));
 
     await hardhatBank.connect(owner).issueECheque(chequeId);
@@ -188,7 +188,7 @@ describe.only('Bank Cheque', function () {
     const amount = ethers.utils.parseEther("1.0");
     const validFrom = 0;
     const validThru = 0;
-    const hash = await hardhatBank.getMessageHash(chequeId, payer, payee, amount, validFrom, validThru, hardhatBank.address);
+    const hash = ethers.utils.solidityKeccak256(['bytes32', 'address', 'address', 'uint', 'uint32', 'uint32', 'address'], [chequeId, payer, payee, amount, validFrom, validThru, hardhatBank.address]);
     const sig = await owner.signMessage(ethers.utils.arrayify(hash));
 
     await hardhatBank.connect(owner).issueECheque(chequeId);
@@ -268,7 +268,7 @@ describe.only('Bank Cheque', function () {
     const amount = ethers.utils.parseEther("1.0");
     const validFrom = 0;
     const validThru = 0;
-    const hash = await hardhatBank.getMessageHash(chequeId, payer, payee, amount, validFrom, validThru, hardhatBank.address);
+    const hash = ethers.utils.solidityKeccak256(['bytes32', 'address', 'address', 'uint', 'uint32', 'uint32', 'address'], [chequeId, payer, payee, amount, validFrom, validThru, hardhatBank.address]);
     const sig = await owner.signMessage(ethers.utils.arrayify(hash));
 
     await hardhatBank.connect(owner).issueECheque(chequeId);
