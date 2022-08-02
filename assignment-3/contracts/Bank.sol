@@ -61,13 +61,13 @@ contract Bank is ReentrancyGuard {
         chequeStatus[_chequeId] = Status.ISSUED;
     }
 
-    function deposit() public payable {
+    function deposit() external payable {
         require(msg.sender != address(0));
         require(msg.value > 0, "Deposit must be bigger than 0");
         userBalances[msg.sender] += msg.value;
     }
 
-    function withdraw(uint256 _amount) public {
+    function withdraw(uint256 _amount) external {
         address sender = msg.sender;
         require(sender != address(0));
         require(_amount > 0, "Withdraw must be bigger than 0");
@@ -90,13 +90,26 @@ contract Bank is ReentrancyGuard {
     {
         address payable payee = payable(chequeData.chequeInfo.payee);
         require(isChequeValid(payee, chequeData), "Invalid cheque");
+        uint32 validFrom = chequeData.chequeInfo.validFrom;
+        uint32 validThru = chequeData.chequeInfo.validThru;
+
+        require(
+            validFrom == 0 || validFrom <= block.number,
+            "The cheque not start yet"
+        );
+        require(
+            validThru == 0 || validThru > block.number,
+            "The cheque expired"
+        );
+
         address payer = chequeData.chequeInfo.payer;
         uint amount = chequeData.chequeInfo.amount;
-        bytes32 chequeId = chequeData.chequeInfo.chequeId;
         require(userBalances[payer] >= amount, "Not enough money");
 
+        bytes32 chequeId = chequeData.chequeInfo.chequeId;
         userBalances[payer] -= amount;
         chequeStatus[chequeId] = Status.REDEEMED;
+
         (bool sent, ) = payee.call{value: amount}("");
         require(sent, "Failed to send Ether");
     }

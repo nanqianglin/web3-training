@@ -54,10 +54,49 @@ describe.only('Bank Cheque', function () {
 
     // expect(
     //   await hardhatBank.isChequeValid(payee, [[
-    //     amount, chequeId, validFrom, validThru, payee, payer
+    //     amount, chequeId, validFrom, validThru, payee, payer, hardhatBank.address
     //   ], sig])
     // ).to.equal(true)
   })
+  it('Should NOT redeem, if cheque not start', async () => {
+    const { hardhatBank, owner, addr1, deposit } = await loadFixture(deployFixture);
+    await deposit();
+
+    const chequeId = ethers.utils.formatBytes32String('1');
+    const payer = owner.address;
+    const payee = addr1.address;
+    const amount = ethers.utils.parseEther("1.0");
+    const validFrom = 100;
+    const validThru = 0;
+    const hash = await hardhatBank.getMessageHash(chequeId, payer, payee, amount, validFrom, validThru, hardhatBank.address);
+    const sig = await owner.signMessage(ethers.utils.arrayify(hash));
+
+    await hardhatBank.connect(owner).issueECheque(chequeId);
+
+    await expect(hardhatBank.connect(addr1).redeem([[
+      amount, chequeId, validFrom, validThru, payee, payer, hardhatBank.address
+    ], sig])).to.be.rejectedWith('The cheque not start yet');
+  })
+  it('Should NOT redeem, if cheque expired', async () => {
+    const { hardhatBank, owner, addr1, deposit } = await loadFixture(deployFixture);
+    await deposit();
+
+    const chequeId = ethers.utils.formatBytes32String('1');
+    const payer = owner.address;
+    const payee = addr1.address;
+    const amount = ethers.utils.parseEther("1.0");
+    const validFrom = 0;
+    const validThru = 1;
+    const hash = await hardhatBank.getMessageHash(chequeId, payer, payee, amount, validFrom, validThru, hardhatBank.address);
+    const sig = await owner.signMessage(ethers.utils.arrayify(hash));
+
+    await hardhatBank.connect(owner).issueECheque(chequeId);
+
+    await expect(hardhatBank.connect(addr1).redeem([[
+      amount, chequeId, validFrom, validThru, payee, payer, hardhatBank.address
+    ], sig])).to.be.rejectedWith('The cheque expired');
+  })
+
   it('Should NOT redeem, if invalid cheque', async () => {
     const { hardhatBank, owner, addr1, deposit } = await loadFixture(deployFixture);
     await deposit();
