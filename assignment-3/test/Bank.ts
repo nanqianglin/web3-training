@@ -49,8 +49,8 @@ describe.only('Bank Cheque', function () {
 
     const beforePendingWithdraw = await hardhatBank.pendingWithdraws(payee);
 
-    await expect(hardhatBank.connect(addr1).withdrawTo(amount, addr1.address)).to.changeEtherBalances(
-      [hardhatBank.address, addr1.address],
+    await expect(hardhatBank.connect(addr1).withdrawTo(amount, payee)).to.changeEtherBalances(
+      [hardhatBank.address, payee],
       [ethers.utils.parseEther('-1'), ethers.utils.parseEther('1')],
     )
 
@@ -64,6 +64,18 @@ describe.only('Bank Cheque', function () {
     //     amount, chequeId, validFrom, validThru, payee, payer, hardhatBank.address
     //   ], sig])
     // ).to.equal(true)
+  })
+  it('Should NOT withdraw to payee, if not redeem first', async () => {
+    const { hardhatBank, owner, addr1, deposit } = await loadFixture(deployFixture);
+    await deposit();
+
+    const chequeId = ethers.utils.formatBytes32String('1');
+    const payee = addr1.address;
+    const amount = ethers.utils.parseEther("1.0");
+
+    await hardhatBank.connect(owner).issueECheque(chequeId);
+
+    await expect(hardhatBank.connect(addr1).withdrawTo(amount, payee)).to.be.revertedWith('Failed to withdraw to recipient');
   })
   it('Should NOT redeem, if cheque not start', async () => {
     const { hardhatBank, owner, addr1, deposit } = await loadFixture(deployFixture);
