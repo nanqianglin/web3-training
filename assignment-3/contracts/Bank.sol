@@ -33,6 +33,8 @@ contract Bank is ReentrancyGuard {
     mapping(bytes32 => Status) public chequeStatus;
     // user => balance
     mapping(address => uint256) public userBalances;
+    // payee => amount
+    mapping(address => uint) public pendingWithdraws;
 
     // constructor() payable {}
 
@@ -80,7 +82,17 @@ contract Bank is ReentrancyGuard {
         require(sent, "Failed to send Ether");
     }
 
-    function withdrawTo(uint256 amount, address payable recipient) external {}
+    // withdraw by payee
+    function withdrawTo(uint256 _amount, address payable recipient) external {
+        require(
+            pendingWithdraws[recipient] >= _amount,
+            "Failed to withdraw to recipient"
+        );
+        pendingWithdraws[recipient] -= _amount;
+
+        (bool sent, ) = recipient.call{value: _amount}("");
+        require(sent, "Failed to send Ether");
+    }
 
     function redeem(Cheque memory chequeData)
         external
@@ -109,9 +121,7 @@ contract Bank is ReentrancyGuard {
         bytes32 chequeId = chequeData.chequeInfo.chequeId;
         userBalances[payer] -= amount;
         chequeStatus[chequeId] = Status.REDEEMED;
-
-        (bool sent, ) = payee.call{value: amount}("");
-        require(sent, "Failed to send Ether");
+        pendingWithdraws[payee] = amount;
     }
 
     function revoke(bytes32 chequeId) external isChequeRedeemed(chequeId) {

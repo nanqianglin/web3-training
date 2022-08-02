@@ -37,20 +37,27 @@ describe.only('Bank Cheque', function () {
     const beforePayerBalance = await hardhatBank.userBalances(owner.address);
     const issuedChequeStatus = await hardhatBank.chequeStatus(chequeId);
 
-    await expect(hardhatBank.connect(addr1).redeem([[
+    await hardhatBank.connect(addr1).redeem([[
       amount, chequeId, validFrom, validThru, payee, payer, hardhatBank.address
-    ], sig])).to.changeEtherBalances(
-      [hardhatBank.address, addr1.address],
-      [ethers.utils.parseEther('-1'), ethers.utils.parseEther('1')],
-    )
+    ], sig])
 
     const afterPayerBalance = await hardhatBank.userBalances(owner.address);
     const redeemedChequeStatus = await hardhatBank.chequeStatus(chequeId);
 
-    expect(issuedChequeStatus).to.be.eq(1);
-    expect(redeemedChequeStatus).to.be.eq(2);
     expect([issuedChequeStatus, redeemedChequeStatus]).to.deep.eq([1, 2]);
     expect(beforePayerBalance.sub(afterPayerBalance)).to.be.eq(ethers.utils.parseEther('1'));
+
+    const beforePendingWithdraw = await hardhatBank.pendingWithdraws(payee);
+
+    await expect(hardhatBank.connect(addr1).withdrawTo(amount, addr1.address)).to.changeEtherBalances(
+      [hardhatBank.address, addr1.address],
+      [ethers.utils.parseEther('-1'), ethers.utils.parseEther('1')],
+    )
+
+    const afterPendingWithdraw = await hardhatBank.pendingWithdraws(payee);
+
+    expect(beforePendingWithdraw).to.be.eq(ethers.utils.parseEther('1'));
+    expect(afterPendingWithdraw).to.be.eq(ethers.utils.parseEther('0'));
 
     // expect(
     //   await hardhatBank.isChequeValid(payee, [[
