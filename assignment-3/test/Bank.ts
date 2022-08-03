@@ -533,7 +533,7 @@ describe('E-cheque sign over', () => {
 })
 
 describe('IsChequeValid function', () => {
-  it.only('Verified cheque ', async () => {
+  it('Verified cheque ', async () => {
     const { hardhatBank, owner, addr1, addr2, addr3 } = await loadFixture(deployFixture);
 
     const chequeId = ethers.utils.formatBytes32String('1');
