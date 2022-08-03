@@ -13,8 +13,7 @@ contract Bank is ReentrancyGuard {
         NOTISSUED,
         ISSUED,
         REDEEMED,
-        REVOKED,
-        EXPIRED
+        REVOKED
     }
     struct ChequeInfo {
         uint amount;
@@ -25,22 +24,38 @@ contract Bank is ReentrancyGuard {
         address payer;
         address contractAddress;
     }
+    struct SignOverInfo {
+        uint32 magicNum;
+        uint8 counter;
+        bytes32 chequeId;
+        address oldPayee;
+        address newPayee;
+    }
     struct Cheque {
         ChequeInfo chequeInfo;
         bytes sig;
     }
-    // chequeId => status
-    mapping(bytes32 => Status) public chequeStatus;
+    struct SignOver {
+        SignOverInfo signOverInfo;
+        bytes sig;
+    }
+    struct ChequeOwner {
+        Status status;
+        address owner;
+    }
+    // chequeId => ChequeOwner
+    mapping(bytes32 => ChequeOwner) public chequeStatus;
     // user => balance
     mapping(address => uint256) public userBalances;
     // payee => amount
     mapping(address => uint) public pendingWithdraws;
+    uint8 constant maxSignOver = 6;
 
     // constructor() payable {}
 
     modifier isChequeRedeemed(bytes32 _chequeId) {
         bool exits = false;
-        if (chequeStatus[_chequeId] == Status.REDEEMED) {
+        if (chequeStatus[_chequeId].status == Status.REDEEMED) {
             exits = true;
         }
         require(exits == false, "Cheque id redeemed");
@@ -48,7 +63,7 @@ contract Bank is ReentrancyGuard {
     }
     modifier isChequeRevoked(bytes32 _chequeId) {
         bool exits = false;
-        if (chequeStatus[_chequeId] == Status.REVOKED) {
+        if (chequeStatus[_chequeId].status == Status.REVOKED) {
             exits = true;
         }
         require(exits == false, "Cheque id revoked");
@@ -56,11 +71,12 @@ contract Bank is ReentrancyGuard {
     }
 
     function issueECheque(bytes32 _chequeId) public {
-        if (chequeStatus[_chequeId] != Status.NOTISSUED) {
+        if (chequeStatus[_chequeId].status != Status.NOTISSUED) {
             revert("Cheque id exists");
         }
 
-        chequeStatus[_chequeId] = Status.ISSUED;
+        chequeStatus[_chequeId].status = Status.ISSUED;
+        chequeStatus[_chequeId].owner = msg.sender;
     }
 
     function deposit() external payable {
@@ -100,8 +116,14 @@ contract Bank is ReentrancyGuard {
         isChequeRedeemed(chequeData.chequeInfo.chequeId)
         nonReentrant
     {
-        address payable payee = payable(chequeData.chequeInfo.payee);
-        require(isChequeValid(payee, chequeData), "Invalid cheque");
+        address payee = chequeData.chequeInfo.payee;
+        address payer = chequeData.chequeInfo.payer;
+        bytes32 chequeId = chequeData.chequeInfo.chequeId;
+        require(
+            chequeStatus[chequeId].owner == payer,
+            "Cheque has signed over"
+        );
+        require(isChequeValid(chequeData, new SignOver[](0)), "Invalid cheque");
         uint32 validFrom = chequeData.chequeInfo.validFrom;
         uint32 validThru = chequeData.chequeInfo.validThru;
 
@@ -114,18 +136,88 @@ contract Bank is ReentrancyGuard {
             "The cheque expired"
         );
 
-        address payer = chequeData.chequeInfo.payer;
         uint amount = chequeData.chequeInfo.amount;
         require(userBalances[payer] >= amount, "Not enough money");
 
-        bytes32 chequeId = chequeData.chequeInfo.chequeId;
         userBalances[payer] -= amount;
-        chequeStatus[chequeId] = Status.REDEEMED;
+        chequeStatus[chequeId].status = Status.REDEEMED;
         pendingWithdraws[payee] = amount;
     }
 
-    function revoke(bytes32 chequeId) external isChequeRedeemed(chequeId) {
-        chequeStatus[chequeId] = Status.REVOKED;
+    function revoke(bytes32 chequeId)
+        external
+        isChequeRevoked(chequeId)
+        isChequeRedeemed(chequeId)
+    {
+        require(
+            msg.sender == chequeStatus[chequeId].owner,
+            "No the owner of the cheque"
+        );
+        chequeStatus[chequeId].status = Status.REVOKED;
+    }
+
+    function notifySignOver(SignOver memory signOverData)
+        external
+        isChequeRevoked(signOverData.signOverInfo.chequeId)
+    {
+        require(validSignOverData(signOverData), "Invalid sign over signature");
+        SignOverInfo memory signOverInfo = signOverData.signOverInfo;
+        require(signOverInfo.counter <= maxSignOver, "Max sign over time is 6");
+        bytes32 chequeId = signOverInfo.chequeId;
+
+        chequeStatus[chequeId].owner = signOverInfo.oldPayee;
+    }
+
+    function redeemSignOver(
+        Cheque memory chequeData,
+        SignOver[] memory signOverData
+    )
+        external
+        isChequeRevoked(chequeData.chequeInfo.chequeId)
+        isChequeRedeemed(chequeData.chequeInfo.chequeId)
+        nonReentrant
+    {
+        // address payee = chequeData.chequeInfo.payee;
+        address payer = chequeData.chequeInfo.payer;
+        bytes32 chequeId = chequeData.chequeInfo.chequeId;
+        address lastOldPayee = signOverData[signOverData.length - 1]
+            .signOverInfo
+            .oldPayee;
+
+        require(
+            chequeStatus[chequeId].owner != payer,
+            "Cheque has not signed over"
+        );
+        require(
+            chequeStatus[chequeId].owner == lastOldPayee,
+            "Cheque has signed over again"
+        );
+        require(
+            isChequeValid(chequeData, signOverData),
+            "Invalid sign over cheque"
+        );
+        uint32 validFrom = chequeData.chequeInfo.validFrom;
+        uint32 validThru = chequeData.chequeInfo.validThru;
+
+        require(
+            validFrom == 0 || validFrom <= block.number,
+            "The cheque not start yet"
+        );
+        require(
+            validThru == 0 || validThru > block.number,
+            "The cheque expired"
+        );
+
+        uint amount = chequeData.chequeInfo.amount;
+        require(userBalances[payer] >= amount, "Not enough money");
+
+        userBalances[payer] -= amount;
+        chequeStatus[chequeId].status = Status.REDEEMED;
+        // after sign over the cheque, pay to the last new payee
+        address newPayee = signOverData[signOverData.length - 1]
+            .signOverInfo
+            .newPayee;
+        pendingWithdraws[newPayee] = amount;
     }
 
     function getMessageHash(
@@ -192,18 +284,14 @@ contract Bank is ReentrancyGuard {
         }
     }
 
-    function isChequeValid(address payee, Cheque memory chequeData)
-        public
-        pure
-        returns (
-            // SignOver[] memory signOverData
-            bool
-        )
-    {
+    function isChequeValid(
+        Cheque memory chequeData,
+        SignOver[] memory signOverData
+    ) public pure returns (bool) {
         bytes32 messageHash = getMessageHash(
             chequeData.chequeInfo.chequeId,
             chequeData.chequeInfo.payer,
-            payee,
+            chequeData.chequeInfo.payee,
             chequeData.chequeInfo.amount,
             chequeData.chequeInfo.validFrom,
             chequeData.chequeInfo.validThru,
@@ -211,8 +299,70 @@ contract Bank is ReentrancyGuard {
         );
         bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
 
+        bool isSignOverValid = isSignOversChequeValid(signOverData);
+
         return
             recoverSigner(ethSignedMessageHash, chequeData.sig) ==
-            chequeData.chequeInfo.payer;
+            chequeData.chequeInfo.payer &&
+            isSignOverValid;
+    }
+
+    function getSignOverMessageHash(
+        uint32 magicNum,
+        uint8 counter,
+        bytes32 chequeId,
+        address oldPayee,
+        address newPayee
+    ) public pure returns (bytes32) {
+        return
+            keccak256(
+                abi.encodePacked(
+                    magicNum,
+                    counter,
+                    chequeId,
+                    oldPayee,
+                    newPayee
+                )
+            );
+    }
+
+    function validSignOverData(SignOver memory signOverData)
+        internal
+        pure
+        returns (bool)
+    {
+        SignOverInfo memory signOverInfo = signOverData.signOverInfo;
+        bytes32 messageHash = getSignOverMessageHash(
+            signOverInfo.magicNum,
+            signOverInfo.counter,
+            signOverInfo.chequeId,
+            signOverInfo.oldPayee,
+            signOverInfo.newPayee
+        );
+
+        bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
+
+        return
+            recoverSigner(ethSignedMessageHash, signOverData.sig) ==
+            signOverInfo.oldPayee;
+    }
+
+    function isSignOversChequeValid(SignOver[] memory signOverData)
+        internal
+        pure
+        returns (bool)
+    {
+        bool isAllValid = true;
+        uint len = signOverData.length;
+        uint i = 0;
+
+        for (i; i < len; i++) {
+            bool isValid = validSignOverData(signOverData[i]);
+
+            if (!isValid) {
+                isAllValid = false;
+            }
+        }
+        return isAllValid;
     }
 }
