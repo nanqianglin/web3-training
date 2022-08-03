@@ -141,7 +141,7 @@ contract Bank is ReentrancyGuard {
 
         userBalances[payer] -= amount;
         chequeStatus[chequeId].status = Status.REDEEMED;
-        pendingWithdraws[payee] = amount;
+        pendingWithdraws[payee] += amount;
     }
 
     function revoke(bytes32 chequeId)
@@ -217,7 +217,7 @@ contract Bank is ReentrancyGuard {
         address newPayee = signOverData[signOverData.length - 1]
             .signOverInfo
             .newPayee;
-        pendingWithdraws[newPayee] = amount;
+        pendingWithdraws[newPayee] += amount;
     }
 
     function getMessageHash(
