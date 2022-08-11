@@ -10,6 +10,33 @@ contract SoccerGambling {
         string indexed title,
         uint256 value
     );
+    event PlayGamble(
+        address indexed user,
+        uint256 indexed id,
+        GambleOption option,
+        uint256 amount
+    );
+    event RevealGamble(
+        uint256 indexed id,
+        GambleOption correctOption,
+        uint256 revealTime
+    );
+    event ApproveGamble(
+        address indexed approver,
+        uint256 indexed id,
+        uint256 approveTime
+    );
+    event RejectGamble(
+        address indexed rejector,
+        uint256 indexed id,
+        uint256 rejectTime
+    );
+    event PunishGambleOwner(uint256 indexed id, address indexed owner);
+    event FinishGamble(
+        address indexed user,
+        uint256 indexed id,
+        uint256 finishTime
+    );
 
     // the quorum info
     address[] public approvers;
@@ -197,6 +224,8 @@ contract SoccerGambling {
         userGambles[id][option].push(msg.sender);
         userGambleAmount[id][option].push(msg.value);
         gamble.filledAmount += (rate * msg.value);
+
+        emit PlayGamble(msg.sender, id, option, msg.value);
     }
 
     function revealGamble(uint256 id, GambleOption correctOption)
@@ -215,6 +244,8 @@ contract SoccerGambling {
 
         gamble.isRevealed = true;
         correctAnswers[id] = correctOption;
+
+        emit RevealGamble(id, correctOption, block.timestamp);
     }
 
     function approveGamble(uint256 id)
@@ -229,6 +260,8 @@ contract SoccerGambling {
 
         gamble.approvers += 1;
         isApprovedOrRejected[id][msg.sender] = true;
+
+        emit ApproveGamble(msg.sender, id, block.timestamp);
     }
 
     // reject the dishonest gamble owner, if the owner reveal the wrong result
@@ -248,6 +281,8 @@ contract SoccerGambling {
         if (rejectQuorum >= rejectQuorum) {
             punishDishonestOwner(id);
         }
+
+        emit RejectGamble(msg.sender, id, block.timestamp);
     }
 
     // punish the gamble owner
@@ -287,6 +322,8 @@ contract SoccerGambling {
         }
 
         gamble.isFinished = true;
+
+        emit PunishGambleOwner(id, gamble.owner);
     }
 
     // allocate money to the user and gamble owner
@@ -315,6 +352,8 @@ contract SoccerGambling {
         }
 
         gamble.isFinished = true;
+
+        emit FinishGamble(msg.sender, id, block.timestamp);
         // withdraw the supplied cro, and get tonic
     }
 
