@@ -58,20 +58,27 @@ contract SoccerGambling {
         string optionB;
     }
 
-    struct Gamble {
-        uint256 id;
-        string title;
-        string description;
-        Options options;
-        Rate rate;
-        uint256 expiredAt;
+    struct GambleStatus {
         bool isRevealed;
         bool isFinished;
-        address owner;
         uint256 totalAmount;
         uint256 filledAmount;
         uint256 approvers;
         uint256 rejecters;
+    }
+    struct GambleInfo {
+        string title;
+        string description;
+        address owner;
+        Options options;
+        Rate rate;
+        uint256 expiredAt;
+    }
+
+    struct Gamble {
+        uint256 id;
+        GambleInfo gambleInfo;
+        GambleStatus gambleStatus;
     }
 
     // id => GambleOption => user address[]
@@ -89,31 +96,12 @@ contract SoccerGambling {
     Gamble[] public gambleList;
 
     modifier checkInputAmount(uint256 id, uint256 amount) {
-        Gamble memory gamble = gambleList[id];
-        uint256 leftAmount = gamble.totalAmount - gamble.filledAmount;
+        uint256 leftAmount = gambleList[id].gambleStatus.totalAmount -
+            gambleList[id].gambleStatus.filledAmount;
         require(leftAmount >= amount, "Not enough fill amount");
         _;
     }
-    modifier maxInputAmount(
-        uint256 id,
-        GambleOption option,
-        uint256 amount
-    ) {
-        Gamble memory gamble = gambleList[id];
-        Rate memory rate = gamble.rate;
 
-        // total amount = 1000 cro, rate [1, 2], maxAmount for A = 1000, maxAmount for B = 500
-        // total amount = 1000 cro, rate [1, 1], maxAmount for A and B = 1000;
-
-        uint256 maxAmount = amount *
-            (option == GambleOption.A ? rate.rateA : rate.rateB);
-
-        require(
-            gamble.totalAmount - maxAmount >= 0,
-            "Cannot bigger than total prizes"
-        );
-        _;
-    }
     modifier onlyApprover() {
         require(isApprover[msg.sender], "Not approver");
         _;
@@ -124,15 +112,24 @@ contract SoccerGambling {
         _;
     }
     modifier notRevealed(uint256 id) {
-        require(!gambleList[id].isRevealed, "Gamble already revealed");
+        require(
+            !gambleList[id].gambleStatus.isRevealed,
+            "Gamble already revealed"
+        );
         _;
     }
     modifier isRevealed(uint256 id) {
-        require(gambleList[id].isRevealed, "Gamble does not reveal");
+        require(
+            gambleList[id].gambleStatus.isRevealed,
+            "Gamble does not reveal"
+        );
         _;
     }
     modifier notFinished(uint256 id) {
-        require(!gambleList[id].isFinished, "Gamble already finished");
+        require(
+            !gambleList[id].gambleStatus.isFinished,
+            "Gamble already finished"
+        );
         _;
     }
 
@@ -185,18 +182,22 @@ contract SoccerGambling {
         gambleList.push(
             Gamble({
                 id: id,
-                title: title,
-                description: description,
-                options: options,
-                rate: rate,
-                expiredAt: expiredAt,
-                isRevealed: false,
-                isFinished: false,
-                owner: msg.sender,
-                totalAmount: msg.value,
-                filledAmount: 0,
-                approvers: 0,
-                rejecters: 0
+                gambleInfo: GambleInfo({
+                    title: title,
+                    description: description,
+                    owner: msg.sender,
+                    options: options,
+                    rate: rate,
+                    expiredAt: expiredAt
+                }),
+                gambleStatus: GambleStatus({
+                    isRevealed: false,
+                    isFinished: false,
+                    totalAmount: msg.value,
+                    filledAmount: 0,
+                    approvers: 0,
+                    rejecters: 0
+                })
             })
         );
 
@@ -211,19 +212,24 @@ contract SoccerGambling {
         gambleExists(id)
         notRevealed(id)
         notFinished(id)
-        maxInputAmount(id, option, msg.value)
         checkInputAmount(id, msg.value)
     {
         require(msg.value > 0, "Must input the numbers of cro");
 
         Gamble storage gamble = gambleList[id];
         uint256 rate = option == GambleOption.A
-            ? gamble.rate.rateA
-            : gamble.rate.rateB;
+            ? gamble.gambleInfo.rate.rateA
+            : gamble.gambleInfo.rate.rateB;
+        uint256 maxAmount = msg.value * rate;
+
+        require(
+            gamble.gambleStatus.totalAmount - maxAmount >= 0,
+            "Cannot bigger than total prizes"
+        );
 
         userGambles[id][option].push(msg.sender);
         userGambleAmount[id][option].push(msg.value);
-        gamble.filledAmount += (rate * msg.value);
+        gamble.gambleStatus.filledAmount += (rate * msg.value);
 
         emit PlayGamble(msg.sender, id, option, msg.value);
     }
@@ -236,13 +242,16 @@ contract SoccerGambling {
     {
         Gamble storage gamble = gambleList[id];
 
-        require(gamble.owner == msg.sender, "Not the owner of the gamble");
         require(
-            gamble.expiredAt <= block.timestamp,
+            gamble.gambleInfo.owner == msg.sender,
+            "Not the owner of the gamble"
+        );
+        require(
+            gamble.gambleInfo.expiredAt <= block.timestamp,
             "Gamble can not reveal now"
         );
 
-        gamble.isRevealed = true;
+        gamble.gambleStatus.isRevealed = true;
         correctAnswers[id] = correctOption;
 
         emit RevealGamble(id, correctOption, block.timestamp);
@@ -258,7 +267,7 @@ contract SoccerGambling {
     {
         Gamble storage gamble = gambleList[id];
 
-        gamble.approvers += 1;
+        gamble.gambleStatus.approvers += 1;
         isApprovedOrRejected[id][msg.sender] = true;
 
         emit ApproveGamble(msg.sender, id, block.timestamp);
@@ -275,7 +284,7 @@ contract SoccerGambling {
     {
         Gamble storage gamble = gambleList[id];
 
-        gamble.rejecters += 1;
+        gamble.gambleStatus.rejecters += 1;
         isApprovedOrRejected[id][msg.sender] = true;
 
         if (rejectQuorum >= rejectQuorum) {
@@ -295,10 +304,10 @@ contract SoccerGambling {
 
         GambleOption _correctAnswers = correctAnswers[id];
         address[] memory winners = getWinners(id, _correctAnswers);
-        uint256 amountForGambleOwner = gamble.totalAmount;
+        uint256 amountForGambleOwner = gamble.gambleStatus.totalAmount;
         uint256 rate = _correctAnswers == GambleOption.A
-            ? gamble.rate.rateA
-            : gamble.rate.rateB;
+            ? gamble.gambleInfo.rate.rateA
+            : gamble.gambleInfo.rate.rateB;
 
         for (uint256 i = 0; i < winners.length; i++) {
             uint256 amount = userGambleAmount[id][_correctAnswers][i] * rate;
@@ -321,9 +330,9 @@ contract SoccerGambling {
             }
         }
 
-        gamble.isFinished = true;
+        gamble.gambleStatus.isFinished = true;
 
-        emit PunishGambleOwner(id, gamble.owner);
+        emit PunishGambleOwner(id, gamble.gambleInfo.owner);
     }
 
     // allocate money to the user and gamble owner
@@ -333,14 +342,17 @@ contract SoccerGambling {
         notFinished(id)
     {
         Gamble storage gamble = gambleList[id];
-        require(gamble.approvers >= quorum, "Not enough approvers");
+        require(
+            gamble.gambleStatus.approvers >= quorum,
+            "Not enough approvers"
+        );
 
         GambleOption _correctAnswers = correctAnswers[id];
         address[] memory winners = getWinners(id, _correctAnswers);
-        uint256 amountForGambleOwner = gamble.totalAmount;
+        uint256 amountForGambleOwner = gamble.gambleStatus.totalAmount;
         uint256 rate = _correctAnswers == GambleOption.A
-            ? gamble.rate.rateA
-            : gamble.rate.rateB;
+            ? gamble.gambleInfo.rate.rateA
+            : gamble.gambleInfo.rate.rateB;
 
         for (uint256 i = 0; i < winners.length; i++) {
             uint256 amount = userGambleAmount[id][_correctAnswers][i] * rate;
@@ -348,10 +360,10 @@ contract SoccerGambling {
             allocateReward(winners[i], amount);
         }
         if (amountForGambleOwner > 0) {
-            allocateReward(gamble.owner, amountForGambleOwner);
+            allocateReward(gamble.gambleInfo.owner, amountForGambleOwner);
         }
 
-        gamble.isFinished = true;
+        gamble.gambleStatus.isFinished = true;
 
         emit FinishGamble(msg.sender, id, block.timestamp);
         // withdraw the supplied cro, and get tonic
@@ -373,7 +385,9 @@ contract SoccerGambling {
     {
         Gamble memory gamble = gambleList[id];
 
-        leftAmount = gamble.totalAmount - gamble.filledAmount;
+        leftAmount =
+            gamble.gambleStatus.totalAmount -
+            gamble.gambleStatus.filledAmount;
     }
 
     function allocateReward(address user, uint256 amount) private {
