@@ -92,7 +92,6 @@ contract SoccerGambling {
     // cro amount for users
     mapping(address => uint256) public userBalances;
 
-    uint256 public nextId;
     Gamble[] public gambleList;
 
     modifier checkInputAmount(uint256 id, uint256 amount) {
@@ -174,7 +173,7 @@ contract SoccerGambling {
         uint256 expiredAt
     ) external payable {
         require(
-            msg.value > 100,
+            msg.value > 100 ether,
             "Must put more than 100 cro as the prizes value"
         );
 
@@ -388,6 +387,14 @@ contract SoccerGambling {
         leftAmount =
             gamble.gambleStatus.totalAmount -
             gamble.gambleStatus.filledAmount;
+    }
+
+    function getApprovers() external view returns (address[] memory) {
+        return approvers;
+    }
+
+    function getGambleList() external view returns (Gamble[] memory) {
+        return gambleList;
     }
 
     function allocateReward(address user, uint256 amount) private {
