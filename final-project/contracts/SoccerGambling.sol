@@ -82,10 +82,11 @@ contract SoccerGambling {
     }
 
     // id => GambleOption => user address[]
-    mapping(uint256 => mapping(GambleOption => address[])) userGambles;
+    mapping(uint256 => mapping(GambleOption => address[])) public userGambles;
     // id => GambleOption => user input amount[]
-    mapping(uint256 => mapping(GambleOption => uint256[])) userGambleAmount;
-    mapping(uint256 => GambleOption) correctAnswers;
+    mapping(uint256 => mapping(GambleOption => uint256[]))
+        public userGambleAmount;
+    mapping(uint256 => GambleOption) public correctAnswers;
     // id => approver => bool
     mapping(uint256 => mapping(address => bool)) public isApprovedOrRejected;
 
@@ -131,11 +132,18 @@ contract SoccerGambling {
         );
         _;
     }
+    modifier notExpired(uint256 id) {
+        require(
+            gambleList[id].gambleInfo.expiredAt > block.timestamp,
+            "Gamble expired"
+        );
+        _;
+    }
 
     modifier notApprovedOrRejected(uint256 id) {
         require(
             !isApprovedOrRejected[id][msg.sender],
-            "Gamble already approved or rejected"
+            "You already approved or rejected"
         );
         _;
     }
@@ -210,10 +218,10 @@ contract SoccerGambling {
         payable
         gambleExists(id)
         notRevealed(id)
-        notFinished(id)
+        notExpired(id)
         checkInputAmount(id, msg.value)
     {
-        require(msg.value > 0, "Must input the numbers of cro");
+        require(msg.value >= 1 ether, "Must bigger or equal to 1 cro");
 
         Gamble storage gamble = gambleList[id];
         uint256 rate = option == GambleOption.A
@@ -222,7 +230,7 @@ contract SoccerGambling {
         uint256 maxAmount = msg.value * rate;
 
         require(
-            gamble.gambleStatus.totalAmount - maxAmount >= 0,
+            gamble.gambleStatus.totalAmount >= maxAmount,
             "Cannot bigger than total prizes"
         );
 
@@ -237,17 +245,15 @@ contract SoccerGambling {
         external
         gambleExists(id)
         notRevealed(id)
-        notFinished(id)
     {
         Gamble storage gamble = gambleList[id];
-
+        require(
+            gamble.gambleInfo.expiredAt <= block.timestamp,
+            "Gamble is not expired"
+        );
         require(
             gamble.gambleInfo.owner == msg.sender,
             "Not the owner of the gamble"
-        );
-        require(
-            gamble.gambleInfo.expiredAt <= block.timestamp,
-            "Gamble can not reveal now"
         );
 
         gamble.gambleStatus.isRevealed = true;
@@ -286,20 +292,16 @@ contract SoccerGambling {
         gamble.gambleStatus.rejecters += 1;
         isApprovedOrRejected[id][msg.sender] = true;
 
-        if (rejectQuorum >= rejectQuorum) {
-            punishDishonestOwner(id);
-        }
-
         emit RejectGamble(msg.sender, id, block.timestamp);
     }
 
     // punish the gamble owner
-    function punishDishonestOwner(uint256 id)
-        private
-        onlyApprover
-        gambleExists(id)
-    {
+    function punishDishonestOwner(uint256 id) private gambleExists(id) {
         Gamble storage gamble = gambleList[id];
+        require(
+            gamble.gambleStatus.rejecters >= rejectQuorum,
+            "Cannot execute punish"
+        );
 
         GambleOption _correctAnswers = correctAnswers[id];
         address[] memory winners = getWinners(id, _correctAnswers);
@@ -338,6 +340,7 @@ contract SoccerGambling {
     function finishGamble(uint256 id)
         external
         gambleExists(id)
+        isRevealed(id)
         notFinished(id)
     {
         Gamble storage gamble = gambleList[id];
