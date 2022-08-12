@@ -9,7 +9,7 @@ const gambleOption = {
 
 describe('SoccerGambling', () => {
   async function deployFixture() {
-    const [owner, addr1, addr2, addr3, addr4, addr5, addr6, addr7] = await ethers.getSigners();
+    const [owner, addr1, addr2, addr3, addr4, addr5, addr6, addr7, addr8] = await ethers.getSigners();
 
     const SoccerGambling = await ethers.getContractFactory('SoccerGambling');
     const soccerGambling = await SoccerGambling.deploy([owner.address, addr1.address, addr2.address, addr3.address, addr4.address], 3);
@@ -36,10 +36,10 @@ describe('SoccerGambling', () => {
       soccerGambling,
       owner, addr1, addr2,
       addr3, addr4, addr5,
-      addr6, addr7, title,
-      description, expiredAt,
-      options, rate, value,
-      tenETH, oneYearLater
+      addr6, addr7, addr8,
+      title, description,
+      expiredAt, options,
+      rate, value, tenETH, oneYearLater
     };
   }
 
@@ -179,12 +179,17 @@ describe('SoccerGambling', () => {
 
       const gambleId = 0;
 
+      const contractBeforeBalance = await ethers.provider.getBalance(soccerGambling.address);
+
       await soccerGambling.connect(addr6).playGamble(gambleId, gambleOption.B, { value: tenETH });
 
+      const contractAfterBalance = await ethers.provider.getBalance(soccerGambling.address);
       const player = await soccerGambling.userGambles(gambleId, gambleOption.B, 0);
       const playAmount = await soccerGambling.userGambleAmount(gambleId, gambleOption.B, 0);
       const gamble = await soccerGambling.gambleList(0);
 
+      expect([contractBeforeBalance, contractAfterBalance])
+        .to.be.deep.eq([ethers.utils.parseEther('102'), ethers.utils.parseEther('112')]);
       expect(player).to.be.eq(addr6.address);
       expect(playAmount).to.be.eq(tenETH);
       expect(gamble.gambleStatus.filledAmount).to.be.eq(tenETH.mul(rate.rateB));
@@ -518,5 +523,266 @@ describe('SoccerGambling', () => {
     })
   });
 
+  describe('PunishDishonestOwner', () => {
+    it('Should punish the owner of the Gamble and emit events', async () => {
+      const { soccerGambling, addr1, addr2, addr5, addr6, addr7, addr8, tenETH, oneYearLater } = await loadFixture(deployFixture);
+      const gambleId = 0;
+
+      await createGamble();
+
+      await soccerGambling.connect(addr6).playGamble(gambleId, gambleOption.B, { value: tenETH });
+      await soccerGambling.connect(addr7).playGamble(gambleId, gambleOption.B, { value: tenETH });
+      await soccerGambling.connect(addr8).playGamble(gambleId, gambleOption.A, { value: tenETH });
+
+      await time.increaseTo(oneYearLater);
+      await soccerGambling.connect(addr5).revealGamble(gambleId, gambleOption.A);
+      await soccerGambling.rejectGamble(gambleId);
+      await soccerGambling.connect(addr1).rejectGamble(gambleId);
+      await soccerGambling.connect(addr2).rejectGamble(gambleId);
+
+      const beforeGambleStatus = (await soccerGambling.gambleList(0)).gambleStatus.isFinished;
+      const addr6BeforeBalance = await soccerGambling.userBalances(addr6.address);
+      const addr8BeforeBalance = await soccerGambling.userBalances(addr8.address);
+      const ownerBeforeBalance = await soccerGambling.userBalances(addr5.address);
+
+      await expect(soccerGambling.connect(addr1).punishDishonestOwner(
+        gambleId,
+      ))
+        .to.emit(soccerGambling, 'PunishGambleOwner')
+        .withArgs(gambleId, addr5.address);
+
+
+      const afterGambleStatus = (await soccerGambling.gambleList(0)).gambleStatus.isFinished;
+      const addr6AfterBalance = await soccerGambling.userBalances(addr6.address);
+      const addr8AfterBalance = await soccerGambling.userBalances(addr8.address);
+      const ownerAfterBalance = await soccerGambling.userBalances(addr5.address);
+
+      expect([beforeGambleStatus, afterGambleStatus])
+        .to.be.deep.eq([false, true]);
+      expect([addr6BeforeBalance, addr6AfterBalance])
+        .be.deep.eq([ethers.utils.parseEther('0'), ethers.utils.parseEther('10')]);
+      expect([addr8BeforeBalance, addr8AfterBalance])
+        .be.deep.eq([ethers.utils.parseEther('0'), ethers.utils.parseEther('20')]);
+
+      // 102 - 10 * 2 - 10 = 72
+      expect([ownerBeforeBalance, ownerAfterBalance])
+        .be.deep.eq([ethers.utils.parseEther('0'), ethers.utils.parseEther('72')]);
+    })
+
+    it('Should NOT punish the Gamble if gamble not exists', async () => {
+      const { soccerGambling } = await loadFixture(deployFixture);
+      const gambleId = 0;
+
+      await expect(soccerGambling.punishDishonestOwner(gambleId))
+        .to.be.revertedWith('Gamble does not exist');
+
+    })
+
+
+    it('Should NOT punish the Gamble if gamble is finished', async () => {
+      const { soccerGambling, addr1, addr2, addr3, addr5, addr6, tenETH, oneYearLater } = await loadFixture(deployFixture);
+      const gambleId = 0;
+
+      await createGamble();
+
+      await soccerGambling.connect(addr6).playGamble(gambleId, gambleOption.B, { value: tenETH });
+
+      await time.increaseTo(oneYearLater);
+      await soccerGambling.connect(addr5).revealGamble(gambleId, gambleOption.B);
+      await soccerGambling.approveGamble(gambleId);
+      await soccerGambling.connect(addr1).approveGamble(gambleId);
+      await soccerGambling.connect(addr2).approveGamble(gambleId);
+
+      await soccerGambling.finishGamble(gambleId);
+
+
+      await expect(soccerGambling.connect(addr3).punishDishonestOwner(gambleId))
+        .to.be.revertedWith('Gamble already finished');
+
+    })
+
+    it('Should NOT punish the Gamble if not enough rejecters', async () => {
+      const { soccerGambling, addr1, addr3, addr5, addr6, tenETH, oneYearLater } = await loadFixture(deployFixture);
+      const gambleId = 0;
+
+      await createGamble();
+
+      await soccerGambling.connect(addr6).playGamble(gambleId, gambleOption.B, { value: tenETH });
+
+      await time.increaseTo(oneYearLater);
+      await soccerGambling.connect(addr5).revealGamble(gambleId, gambleOption.B);
+      await soccerGambling.rejectGamble(gambleId);
+
+      await expect(soccerGambling.connect(addr3).punishDishonestOwner(gambleId))
+        .to.be.revertedWith('Cannot execute punish');
+
+    })
+
+  });
+
+  describe('FinishGamble', () => {
+    it('Should finish the Gamble and emit events', async () => {
+      const { soccerGambling, addr1, addr2, addr5, addr6, addr7, addr8, tenETH, oneYearLater } = await loadFixture(deployFixture);
+      const gambleId = 0;
+
+      await createGamble();
+
+      await soccerGambling.connect(addr6).playGamble(gambleId, gambleOption.B, { value: tenETH });
+      await soccerGambling.connect(addr7).playGamble(gambleId, gambleOption.B, { value: tenETH });
+      await soccerGambling.connect(addr8).playGamble(gambleId, gambleOption.A, { value: tenETH });
+
+      await time.increaseTo(oneYearLater);
+      await soccerGambling.connect(addr5).revealGamble(gambleId, gambleOption.B);
+      await soccerGambling.approveGamble(gambleId);
+      await soccerGambling.connect(addr1).approveGamble(gambleId);
+      await soccerGambling.connect(addr2).approveGamble(gambleId);
+
+      const beforeGambleStatus = (await soccerGambling.gambleList(0)).gambleStatus.isFinished;
+      const addr6BeforeBalance = await soccerGambling.userBalances(addr6.address);
+      const ownerBeforeBalance = await soccerGambling.userBalances(addr5.address);
+
+      const now = await getNowTimestamp();
+      await expect(soccerGambling.connect(addr1).finishGamble(
+        gambleId,
+      ))
+        .to.emit(soccerGambling, 'FinishGamble')
+        .withArgs(addr1.address, gambleId, now);
+
+      const afterGambleStatus = (await soccerGambling.gambleList(0)).gambleStatus.isFinished;
+      const addr6AfterBalance = await soccerGambling.userBalances(addr6.address);
+      const ownerAfterBalance = await soccerGambling.userBalances(addr5.address);
+
+      expect([beforeGambleStatus, afterGambleStatus])
+        .to.be.deep.eq([false, true]);
+      expect([addr6BeforeBalance, addr6AfterBalance])
+        .be.deep.eq([ethers.utils.parseEther('0'), ethers.utils.parseEther('30')]);
+
+      // 102 - 2 * 10 * 2 + 10 = 72
+      expect([ownerBeforeBalance, ownerAfterBalance])
+        .be.deep.eq([ethers.utils.parseEther('0'), ethers.utils.parseEther('72')]);
+
+    })
+
+    it('Should NOT finish the Gamble if gamble not exists', async () => {
+      const { soccerGambling } = await loadFixture(deployFixture);
+      const gambleId = 0;
+
+      await expect(soccerGambling.finishGamble(gambleId))
+        .to.be.revertedWith('Gamble does not exist');
+
+    })
+
+
+    it('Should NOT finish the Gamble if gamble is not revealed', async () => {
+      const { soccerGambling } = await loadFixture(deployFixture);
+      const gambleId = 0;
+
+      await createGamble();
+      await expect(soccerGambling.finishGamble(gambleId))
+        .to.be.revertedWith('Gamble does not reveal');
+
+    })
+
+    it('Should NOT finish the Gamble if gamble is finished', async () => {
+      const { soccerGambling, addr1, addr2, addr3, addr5, addr6, tenETH, oneYearLater } = await loadFixture(deployFixture);
+      const gambleId = 0;
+
+      await createGamble();
+
+      await soccerGambling.connect(addr6).playGamble(gambleId, gambleOption.B, { value: tenETH });
+
+      await time.increaseTo(oneYearLater);
+      await soccerGambling.connect(addr5).revealGamble(gambleId, gambleOption.B);
+      await soccerGambling.approveGamble(gambleId);
+      await soccerGambling.connect(addr1).approveGamble(gambleId);
+      await soccerGambling.connect(addr2).approveGamble(gambleId);
+
+      await soccerGambling.finishGamble(gambleId);
+
+
+      await expect(soccerGambling.connect(addr3).finishGamble(gambleId))
+        .to.be.revertedWith('Gamble already finished');
+
+    })
+
+    it('Should NOT finish the Gamble if not enough approvers', async () => {
+      const { soccerGambling, addr1, addr3, addr5, addr6, tenETH, oneYearLater } = await loadFixture(deployFixture);
+      const gambleId = 0;
+
+      await createGamble();
+
+      await soccerGambling.connect(addr6).playGamble(gambleId, gambleOption.B, { value: tenETH });
+
+      await time.increaseTo(oneYearLater);
+      await soccerGambling.connect(addr5).revealGamble(gambleId, gambleOption.B);
+      await soccerGambling.approveGamble(gambleId);
+      await soccerGambling.connect(addr1).approveGamble(gambleId);
+
+      await expect(soccerGambling.connect(addr3).finishGamble(gambleId))
+        .to.be.revertedWith('Not enough approvers');
+
+    })
+
+  });
+
+  describe('Withdraw', () => {
+    it('Should withdraw successfully and emit events', async () => {
+      const { soccerGambling, addr1, addr2, addr5, addr6, addr7, addr8, tenETH, oneYearLater } = await loadFixture(deployFixture);
+      const gambleId = 0;
+
+      await createGamble();
+
+      await soccerGambling.connect(addr6).playGamble(gambleId, gambleOption.B, { value: tenETH });
+      await soccerGambling.connect(addr7).playGamble(gambleId, gambleOption.B, { value: tenETH });
+      await soccerGambling.connect(addr8).playGamble(gambleId, gambleOption.A, { value: tenETH });
+
+      await time.increaseTo(oneYearLater);
+      await soccerGambling.connect(addr5).revealGamble(gambleId, gambleOption.B);
+      await soccerGambling.approveGamble(gambleId);
+      await soccerGambling.connect(addr1).approveGamble(gambleId);
+      await soccerGambling.connect(addr2).approveGamble(gambleId);
+
+      await soccerGambling.connect(addr1).finishGamble(gambleId);
+
+      const addr6BeforeBalance = await soccerGambling.userBalances(addr6.address);
+      const addr7BeforeBalance = await soccerGambling.userBalances(addr7.address);
+      const contractBeforeBalance = await ethers.provider.getBalance(soccerGambling.address);
+
+      await expect(soccerGambling.connect(addr6).withdrawTo(ethers.utils.parseEther('30'), addr6.address))
+        .to.changeEtherBalances(
+          [soccerGambling.address, addr6.address],
+          [ethers.utils.parseEther('-30'), ethers.utils.parseEther('30')],
+        )
+
+      const addr6AfterBalance = await soccerGambling.userBalances(addr6.address);
+      const contractAfterBalance = await ethers.provider.getBalance(soccerGambling.address);
+
+      expect([addr6BeforeBalance, addr6AfterBalance])
+        .to.be.deep.eq([ethers.utils.parseEther('30'), ethers.utils.parseEther('0')])
+
+      await expect(soccerGambling.connect(addr7).withdrawTo(
+        ethers.utils.parseEther('10'),
+        addr7.address,
+      ))
+        .to.emit(soccerGambling, 'WithdrawTo')
+        .withArgs(ethers.utils.parseEther('10'), addr7.address, addr7.address);
+
+      const addr7AfterBalance = await soccerGambling.userBalances(addr7.address);
+      const contractAfterBalance2 = await ethers.provider.getBalance(soccerGambling.address);
+
+      expect([addr7BeforeBalance, addr7AfterBalance])
+        .to.be.deep.eq([ethers.utils.parseEther('30'), ethers.utils.parseEther('20')])
+
+      expect([contractBeforeBalance, contractAfterBalance, contractAfterBalance2])
+        .to.be.deep.eq([ethers.utils.parseEther('132'), ethers.utils.parseEther('102'), ethers.utils.parseEther('92')])
+    })
+
+    it('Should NOT withdraw if not enough balance', async () => {
+      const { soccerGambling, addr6 } = await loadFixture(deployFixture);
+
+      await expect(soccerGambling.connect(addr6).withdrawTo(ethers.utils.parseEther('30'), addr6.address))
+        .to.be.revertedWith('Not enough funds to withdraw')
+    })
+  });
 })
 

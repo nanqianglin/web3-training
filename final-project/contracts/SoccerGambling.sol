@@ -37,6 +37,11 @@ contract SoccerGambling {
         uint256 indexed id,
         uint256 finishTime
     );
+    event WithdrawTo(
+        uint256 amount,
+        address indexed recipient,
+        address indexed executor
+    );
 
     // the quorum info
     address[] public approvers;
@@ -296,7 +301,11 @@ contract SoccerGambling {
     }
 
     // punish the gamble owner
-    function punishDishonestOwner(uint256 id) private gambleExists(id) {
+    function punishDishonestOwner(uint256 id)
+        external
+        gambleExists(id)
+        notFinished(id)
+    {
         Gamble storage gamble = gambleList[id];
         require(
             gamble.gambleStatus.rejecters >= rejectQuorum,
@@ -311,24 +320,30 @@ contract SoccerGambling {
             : gamble.gambleInfo.rate.rateB;
 
         for (uint256 i = 0; i < winners.length; i++) {
-            uint256 amount = userGambleAmount[id][_correctAnswers][i] * rate;
-            amountForGambleOwner -= amount;
-            allocateReward(winners[i], amount);
+            uint256 amount = userGambleAmount[id][_correctAnswers][i];
+            amountForGambleOwner -= amount * rate;
+            allocateReward(winners[i], amount * rate + amount);
         }
 
-        // give the money of owner to the other users
+        // give the money to the other users
         if (amountForGambleOwner > 0) {
-            address[] memory otherUsers = userGambles[id][
-                _correctAnswers == GambleOption.A
-                    ? GambleOption.A
-                    : GambleOption.B
-            ];
+            address[] memory otherUsers = getFailures(id, _correctAnswers);
             uint256 _len = otherUsers.length;
-            uint256 _amount = amountForGambleOwner / _len;
 
-            for (uint256 i = 0; i < _len; i++) {
-                allocateReward(otherUsers[i], _amount);
+            for (uint256 j = 0; j < _len; j++) {
+                uint256 othersAmount = userGambleAmount[id][
+                    _correctAnswers == GambleOption.A
+                        ? GambleOption.B
+                        : GambleOption.A
+                ][j];
+
+                amountForGambleOwner -= othersAmount;
+                allocateReward(otherUsers[j], othersAmount);
             }
+        }
+        // give the money to the owner
+        if (amountForGambleOwner > 0) {
+            allocateReward(gamble.gambleInfo.owner, amountForGambleOwner);
         }
 
         gamble.gambleStatus.isFinished = true;
@@ -356,10 +371,19 @@ contract SoccerGambling {
             ? gamble.gambleInfo.rate.rateA
             : gamble.gambleInfo.rate.rateB;
 
+        // give money to the winners
         for (uint256 i = 0; i < winners.length; i++) {
-            uint256 amount = userGambleAmount[id][_correctAnswers][i] * rate;
-            amountForGambleOwner -= amount;
-            allocateReward(winners[i], amount);
+            uint256 amount = userGambleAmount[id][_correctAnswers][i];
+            amountForGambleOwner -= amount * rate;
+            allocateReward(winners[i], amount * rate + amount);
+        }
+
+        // give the money of failures to the owner
+        uint256[] memory failureMounts = userGambleAmount[id][
+            _correctAnswers == GambleOption.A ? GambleOption.B : GambleOption.A
+        ];
+        for (uint256 j = 0; j < failureMounts.length; j++) {
+            amountForGambleOwner += failureMounts[j];
         }
         if (amountForGambleOwner > 0) {
             allocateReward(gamble.gambleInfo.owner, amountForGambleOwner);
@@ -377,6 +401,19 @@ contract SoccerGambling {
         returns (address[] memory)
     {
         return userGambles[id][correctOption];
+    }
+
+    function getFailures(uint256 id, GambleOption correctOption)
+        public
+        view
+        returns (address[] memory)
+    {
+        return
+            userGambles[id][
+                correctOption == GambleOption.A
+                    ? GambleOption.B
+                    : GambleOption.A
+            ];
     }
 
     // get the unfilled amount of the gamble
@@ -406,13 +443,15 @@ contract SoccerGambling {
 
     function withdrawTo(uint256 _amount, address payable recipient) external {
         require(
-            userBalances[recipient] >= _amount,
-            "Failed to withdraw to recipient"
+            userBalances[msg.sender] >= _amount,
+            "Not enough funds to withdraw"
         );
-        userBalances[recipient] -= _amount;
+        userBalances[msg.sender] -= _amount;
 
         (bool sent, ) = recipient.call{value: _amount}("");
         require(sent, "Failed to send Ether");
+
+        emit WithdrawTo(_amount, recipient, msg.sender);
     }
 
     receive() external payable {}
