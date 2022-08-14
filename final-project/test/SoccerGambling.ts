@@ -145,11 +145,15 @@ describe('SoccerGambling', () => {
 
       const title1 = 'Mexico vs Brazil';
       const description1 = 'Mexico-Brazil | Who will won?';
+      const options1 = {
+        optionA: "A. Mexico",
+        optionB: "B. Brazil",
+      };
 
       await expect(soccerGambling.connect(addr5).createGamble(
         title1,
         description1,
-        options,
+        options1,
         rate,
         expiredAt,
         { value }
@@ -169,6 +173,19 @@ describe('SoccerGambling', () => {
         expiredAt,
         { value: ethers.utils.parseEther('1') }
       )).to.be.revertedWith('Must put more than 100 cro as the prizes value');
+    })
+
+    it.only('Should NOT create a new Gamble if expired is before now', async () => {
+      const { soccerGambling, addr5, title, description, options, rate, value } = await loadFixture(deployFixture);
+
+      await expect(soccerGambling.connect(addr5).createGamble(
+        title,
+        description,
+        options,
+        rate,
+        1660176000, // 2022-08-11
+        { value }
+      )).to.be.revertedWith('Expired at must be greater than now');
     })
   });
 

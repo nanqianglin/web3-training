@@ -189,6 +189,10 @@ contract SoccerGambling {
             msg.value > 100 ether,
             "Must put more than 100 cro as the prizes value"
         );
+        require(
+            expiredAt > block.timestamp,
+            "Expired at must be greater than now"
+        );
 
         uint256 id = gambleList.length;
         gambleList.push(
@@ -435,6 +439,10 @@ contract SoccerGambling {
 
     function getGambleList() external view returns (Gamble[] memory) {
         return gambleList;
+    }
+
+    function getContractBalance() external view returns (uint256 balance) {
+        balance = address(this).balance;
     }
 
     function allocateReward(address user, uint256 amount) private {
