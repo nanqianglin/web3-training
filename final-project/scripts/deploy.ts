@@ -10,7 +10,7 @@ async function main() {
 
   const SoccerGambling = await ethers.getContractFactory("MyFactory");
   // const soccerGambling = await SoccerGambling.deploy([deployer.address, addr1.address, addr2.address, addr3.address, addr4.address], 3, contractAddress);
-  const soccerGambling = await SoccerGambling.deploy([deployer.address], 1, contractAddress);
+  const soccerGambling = await SoccerGambling.deploy([deployer.address, addr1.address,], 2, contractAddress);
 
   console.log("SoccerGambling address:", soccerGambling.address);
 }

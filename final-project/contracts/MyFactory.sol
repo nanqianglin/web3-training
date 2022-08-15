@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.9;
 
-// import "hardhat/console.sol";
+import "hardhat/console.sol";
 
 interface IToken {
     // function balanceOfUnderlying(address owner) external returns (uint256);
@@ -120,9 +120,9 @@ contract GamblePrize {
         uint256 balance = address(this).balance;
         uint256 amount = gamble.gambleStatus.totalAmount;
         uint256 interest = balance - amount;
-        // console.log(balance);
-        // console.log(amount);
-        // console.log(interest);
+        console.log(balance);
+        console.log(amount);
+        console.log(interest);
 
         if (interest > 0) {
             (bool _sent, ) = owner.call{value: interest}("");
