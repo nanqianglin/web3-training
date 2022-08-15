@@ -175,7 +175,7 @@ describe('SoccerGambling', () => {
       )).to.be.revertedWith('Must put more than 100 cro as the prizes value');
     })
 
-    it.only('Should NOT create a new Gamble if expired is before now', async () => {
+    it('Should NOT create a new Gamble if expired is before now', async () => {
       const { soccerGambling, addr5, title, description, options, rate, value } = await loadFixture(deployFixture);
 
       await expect(soccerGambling.connect(addr5).createGamble(
