@@ -301,10 +301,10 @@ contract MyFactory {
             msg.value > minCro,
             "Must put more than the amounts of minimum cro as the prizes value"
         );
-        // require(
-        //     expiredAt > block.timestamp,
-        //     "Expired at must be greater than now"
-        // );
+        require(
+            expiredAt > block.timestamp,
+            "Expired at must be greater than now"
+        );
 
         uint256 id = gamblePrizes.length;
         // console.log(msg.value);
